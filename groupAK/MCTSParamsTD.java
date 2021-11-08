@@ -33,7 +33,8 @@ public class MCTSParamsTD implements ParameterSet {
     public int num_iterations = 200;//200
     public int num_fmcalls = 2000;
     public int num_time = 40;//40
-
+    public double gamma = 0.98; // change this to test decay factor
+    public double rolloutType = 2; // choose 0 for default action selection 1 for OSLA action selection and 2 for Modified Action selection used in testing
 
 
     @Override

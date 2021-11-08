@@ -29,9 +29,6 @@ public class SingleTreeNode
     private Types.ACTIONS[] actions;
     private GameState rootState;
     private StateHeuristic rootStateHeuristic;
-    private double gamma = 0.98; //used for the discount factor for decaying rewards
-    private double rolloutType = 1; // choose 0 for default action selection 1 for OSLA action selection and 2 for Modified Action selection used in testing
-
 
     SingleTreeNode(MCTSParamsTD p, Random rnd, int num_actions, Types.ACTIONS[] actions) {
         this(p, null, -1, rnd, num_actions, actions, 0, null);
@@ -172,6 +169,7 @@ public class SingleTreeNode
         {
             double hvVal = child.totValue;
             double childValue =  hvVal / (child.nVisits + params.epsilon);
+
             double hSA = params.heuristic_method;// retrieve domain specific heuristic knowledge using the heuristic of the agent
             double nSA = (child.nVisits); // this was created to use in progressive bias
 
@@ -211,17 +209,17 @@ private double rollOut(GameState state)
 
     while (!finishRollout(state,thisDepth)) {
 
-        if (rolloutType == 0) {
+        if (params.rolloutType == 0) {
             int action = safeRandomAction(state); // returns action selection from the default
             roll(state, actions[action]);
             thisDepth++;
 
-        }else if (rolloutType == 1){
+        }else if (params.rolloutType == 1){
             Types.ACTIONS action = actOSLA(state); // returns action from the OSLA action selection Method
             roll(state, action);
             thisDepth++;
 
-        }else if (rolloutType == 2){
+        }else if (params.rolloutType == 2){
             int action = evaluatedRandomAction(state); // returns action from the evaluated random action selection Method
             roll(state, actions[action]);
             thisDepth++;
@@ -266,21 +264,21 @@ private double rollOut(GameState state)
         double maxQ = Double.NEGATIVE_INFINITY;
         Types.ACTIONS bestAction = null;
 
-        for (Types.ACTIONS act : actionsList) {
-            GameState gsCopy = state.copy();
-            roll(gsCopy, act);
-            double valState = rootStateHeuristic.evaluateState(gsCopy);
+        for (Types.ACTIONS act : actionsList) { // for each legal action available in the array list
+            GameState gsCopy = state.copy(); // the gamestate is copied to be used in the forward model
+            roll(gsCopy, act); //simulate the action in gamestate using forward model
+            double valState = rootStateHeuristic.evaluateState(gsCopy); // evaluate the state and return a score
 
             double Q = Utils.noise(valState, params.epsilon, this.m_rnd.nextDouble());
 
-            if (Q > maxQ) {
+            if (Q > maxQ) { // if the score is higher than the max stored value then replace maxQ and becomes the best action
                 maxQ = Q;
                 bestAction = act;
             }
 
         }
 
-        return bestAction;
+        return bestAction; // return the best action to be rolled out.
 
     }
 
@@ -300,40 +298,38 @@ private double rollOut(GameState state)
     int prevAction = chosenAction;
     while(actionsToTry.size() > 0) {
 
-            int nAction = m_rnd.nextInt(actionsToTry.size());
-          //  int rndSafeAction = m_rnd.nextInt(actionsToTry.size());
+            int nAction = m_rnd.nextInt(actionsToTry.size()); // selects a random integer number
 
-            Types.ACTIONS act = actionsToTry.get(nAction);
-            Types.ACTIONS act2 = actionsToTry.get(prevAction);
+            Types.ACTIONS act = actionsToTry.get(nAction); // picks the correspnding action from the random number chosen above
+            Types.ACTIONS act2 = actionsToTry.get(prevAction); // picks the action chosen from the stored previous action
 
-            //Types.ACTIONS act3 = actionsToTry.get(rndSafeAction); // code optimisation for speed
-        // there is no gain to pick a third random action as it may be worse than the first random action and evaluating and rolling this action will decrease speed of the agent.
+            GameState gsCopy = state.copy(); // copies the current game state to be used for random action
+            GameState gsCopy2 = state.copy();// copies the current game state to be used for previous action
 
-            GameState gsCopy = state.copy();
-            GameState gsCopy2 = state.copy();
+            roll(gsCopy, act); // simualate the random action with the current game state
+            roll(gsCopy2, act2);// simualate the previous action with the current game state
 
-            roll(gsCopy, act);
-            roll(gsCopy2, act2);
-
-        double valState = rootStateHeuristic.evaluateState(gsCopy);
-        double Q = Utils.noise(valState, params.epsilon, this.m_rnd.nextDouble());
-        double prevValState = rootStateHeuristic.evaluateState(gsCopy2);
-        double Qprev = Utils.noise(prevValState, params.epsilon, this.m_rnd.nextDouble());
+        double valState = rootStateHeuristic.evaluateState(gsCopy); // evaluate the state and returns a score for that action
+        double Q = Utils.noise(valState, params.epsilon, this.m_rnd.nextDouble()); // add noise to break ties
+        double prevValState = rootStateHeuristic.evaluateState(gsCopy2);// evaluate the state and returns a score for that action
+        double Qprev = Utils.noise(prevValState, params.epsilon, this.m_rnd.nextDouble());// add noise to break ties
 
 
-            if (Q > maxQ) {
+            if (Q > maxQ ) { // compare the score to the highest evaluated action if greater then this will be played
                 maxQ = Q;
                 chosenAction = nAction;
                 //list.add(new storedActions(nAction,Q)); // tried to store action and evaluation into a list with a wrapper
                 // class and retun the highest value action to be played instead of the previous action.
                 //since hashmaps only allow a key and a value. i would need a key, action, evaluation.
         }
-         else if (Qprev > maxQ ) {
+         else if (Qprev > Q ) { // if the score above was not greater than the highest evaluated action
+             // then the previous action can be compared to the new random action. if it scores higher it will be played.
              maxQ = Qprev;
                 chosenAction = prevAction;
                act = act2;
 
-            } else {
+            } else { // if the random action isnt higher than the highest evaluated action but the previous action
+             // doesnt score higher than the random action then its best to just play the random action
                 chosenAction = nAction;
             }
 
@@ -342,7 +338,7 @@ private double rollOut(GameState state)
             int x = pos.x + dir.x;
             int y = pos.y + dir.y;
 
-            if (x >= 0 && x < width && y >= 0 && y < height)
+            if (x >= 0 && x < width && y >= 0 && y < height) // checks whether the action is safe
                 if (board[y][x] != Types.TILETYPE.FLAMES)
                     return chosenAction;
 
@@ -374,7 +370,7 @@ private double rollOut(GameState state)
         while(n != null)
         {
             n.nVisits++;
-            result = result * Math.pow(gamma,n.m_depth); //discount factor  applied to the result acquired during
+            result = result * Math.pow(params.gamma,n.m_depth); //discount factor  applied to the result acquired during
             // simulation - the idea was to see how the agent will play when choosing actions
             // from states closer to the root node.
             n.totValue += result;
